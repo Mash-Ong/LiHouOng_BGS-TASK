@@ -34,7 +34,10 @@ private:
 	UCameraComponent* FollowCamera;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Mesh, meta = (AllowPrivateAccess = "true"))
-	UStaticMeshComponent* Skateboard;
+	USceneComponent* SkateboardRoot;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Mesh, meta = (AllowPrivateAccess = "true"))
+	UStaticMeshComponent* SkateboardMesh;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputMappingContext* DefaultMappingContext;
@@ -117,9 +120,9 @@ private:
 	FTimerHandle AutoPushTimerHandle;
 
 
-	float Acceleration;
+	/*float Acceleration;
 	float Deceleration;
 	float AccelerationDecayRate;
-	FVector CurrentVelocity;
+	FVector CurrentVelocity;*/
 
 };
