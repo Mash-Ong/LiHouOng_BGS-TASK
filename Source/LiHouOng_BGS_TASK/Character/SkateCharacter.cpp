@@ -103,8 +103,6 @@ void ASkateCharacter::UpdateIKLocations()
 		LookAtRotation = FMath::RInterpTo(SkateboardRoot->GetComponentRotation(), LookAtRotation, GetWorld()->GetDeltaSeconds(), 10.0f);
 		SkateboardRoot->SetWorldRotation(LookAtRotation);
 	}
-	//GetMesh()->GetBoneLocation("LeftFoot")
-	//GetMesh()->GetBoneLocation("RightFoot")
 }
 
 void ASkateCharacter::StartBraking()
@@ -138,9 +136,6 @@ void ASkateCharacter::Move(const FInputActionValue& Value)
 
 	if (GetForwardInput() >= 0.0f)
 	{
-		// Calculate decay based on current speed
-		/*float Speed = CurrentVelocity.Size();
-		float EffectiveAcceleration = FMath::Exp(-AccelerationDecayRate * (Speed / GetCharacterMovement()->GetMaxSpeed()));*/
 		AddMovementInput(GetSkatingForwardDir() * GetForwardInput(), 1.0f);
 	}
 	else
@@ -168,7 +163,6 @@ void ASkateCharacter::Turn()
 	}
 	TurnRate *= GetRightInput() < 0 ? -1 : 1;
 	AddControllerYawInput(GetCharacterMovement()->RotationRate.Yaw * TurnRate * GetWorld()->GetDeltaSeconds());
-	//AddMovementInput(GetSkatingRightDir(), TurnRate);
 }
 
 void ASkateCharacter::StartPushing()
@@ -190,6 +184,12 @@ void ASkateCharacter::StopPushing()
 void ASkateCharacter::Push(const float Force)
 {
 	GetCharacterMovement()->AddImpulse(GetSkatingForwardDir() * Force);
+}
+
+void ASkateCharacter::GetFootPlacements(FVector& LF_Loc, FVector& RF_Loc)
+{
+	TraceForSurface(GetMesh()->GetBoneLocation("LeftFoot"), 10.0f, LF_Loc);
+	TraceForSurface(GetMesh()->GetBoneLocation("LeftFoot"), 10.0f, RF_Loc);
 }
 
 bool ASkateCharacter::TraceForSurface(const FVector& Origin, const float TraceHalfHeight, FVector& ImpactPoint, bool IgnoreSelf)

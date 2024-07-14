@@ -107,6 +107,10 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void Push(const float Force);
 
+	// For leg IK in the animation blueprint.
+	UFUNCTION(BlueprintCallable)
+	void GetFootPlacements(FVector& LF_Loc, FVector& RF_Loc);
+
 private:
 	bool bShouldPush = false;
 
@@ -126,8 +130,4 @@ private:
 	// CameraBoom's relative pitch will change between -CameraPitchRange and CameraPitchRange.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true", ClampMin = "0.0", ClampMax = "70.0"))
 	float MaxCamPitch = 45.0f;
-
-	/*CameraBoom's relative pitch will change between -CameraPitchRange and CameraPitchRange.
-		UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
-		float CameraPitchRange = 15.0f;*/
 };
