@@ -96,8 +96,8 @@ void ASkateCharacter::Landed(const FHitResult& Hit)
 void ASkateCharacter::UpdateIKLocations()
 {
 	FVector FW_HitLoc, BW_HitLoc;
-	bool bFW_Hit = TraceForSurface(SkateboardMesh->GetSocketLocation("FW_Center"), 50.0f, FW_HitLoc);
-	bool bBW_Hit = TraceForSurface(SkateboardMesh->GetSocketLocation("BW_Center"), 50.0f, BW_HitLoc);
+	bool bFW_Hit = TraceForSurface(SkateboardMesh->GetSocketLocation("FW_Center"), 100.0f, FW_HitLoc);
+	bool bBW_Hit = TraceForSurface(SkateboardMesh->GetSocketLocation("BW_Center"), 100.0f, BW_HitLoc);
 	{
 		FRotator LookAtRotation = FRotationMatrix::MakeFromX(FW_HitLoc - BW_HitLoc).Rotator();
 		LookAtRotation = FMath::RInterpTo(SkateboardRoot->GetComponentRotation(), LookAtRotation, GetWorld()->GetDeltaSeconds(), 10.0f);
