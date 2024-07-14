@@ -11,16 +11,6 @@ class UInputAction;
 class UStaticMeshComponent;
 struct FInputActionValue;
 
-UENUM(BlueprintType)
-enum class ESkatingState : uint8
-{
-	Standing, // No movement, standing on the board.
-	Rolling, // No acceleration, flowing with the board until stopping.
-	Pushing, // Held down the forward (A) key.
-	Braking, // Held down the backward (D) key.
-	Jumping
-};
-
 UCLASS()
 class LIHOUONG_BGS_TASK_API ASkateCharacter : public ACharacter
 {
@@ -55,9 +45,6 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* BrakeAction;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
-	UInputAction* LookAction;
-
 public:
 	// Sets default values for this character's properties
 	ASkateCharacter();
@@ -71,22 +58,38 @@ private:
 	void StartPushing();
 	void StopPushing();
 
-	bool TraceForSurface(const FVector& Origin, const float TraceHalfHeight, FVector& ImpactPoint);
+	bool TraceForSurface(const FVector& Origin, const float TraceHalfHeight, FVector& ImpactPoint, bool IgnoreSelf = true);
 	void SimulateSkatingMovement(float DeltaTime);
+
+	// Change pitch and target arm length based on the character's velocity.
+	void UpdateCameraBoom();
 	FVector GetSkatingForwardDir() const;
 	FVector GetSkatingRightDir() const;
+	void AlignSkateboardWithVelocity();
+	bool IsBraking() const;
+
 protected:
-	virtual void PostInitializeComponents() override;
 
 	virtual void Tick(float DeltaTime) override;
 
-	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 	virtual void Landed(const FHitResult& Hit) override;
 
 	// Perform raycasts to change the skateboard orientation and foot desired resting location.
 	void UpdateIKLocations();
+
+	void StartBraking();
+
+	void StopBraking();
+
+	// Will play a timeline animation as feedback for braking in the blueprint.
+	UFUNCTION(BlueprintImplementableEvent)
+	void PlayBrakeAnim();
+
+	// Will play a timeline animation as feedback for braking in the blueprint.
+	UFUNCTION(BlueprintImplementableEvent)
+	void ReverseBrakeAnim();
 
 public:
 	FORCEINLINE USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
@@ -104,25 +107,27 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void Push(const float Force);
 
-	UFUNCTION(BlueprintPure)
-	ESkatingState GetState() const { return State; }
-
 private:
 	bool bShouldPush = false;
 
-	ESkatingState State;
-
 	FVector2D MovementVector;
-
-	FRotator DefaultSkateBoardRelRot;
 
 	float AutoPushInterval;
 	FTimerHandle AutoPushTimerHandle;
 
+	// To make the character harder to turn if the speed is slow.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	float FullTurnSpeed = 300.0f;
 
-	/*float Acceleration;
-	float Deceleration;
-	float AccelerationDecayRate;
-	FVector CurrentVelocity;*/
+	// CameraBoom's relative pitch will change between -CameraPitchRange and CameraPitchRange.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true", ClampMin = "-70.0", ClampMax = "0.0"))
+	float MinCamPitch = -15.0f;
 
+	// CameraBoom's relative pitch will change between -CameraPitchRange and CameraPitchRange.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true", ClampMin = "0.0", ClampMax = "70.0"))
+	float MaxCamPitch = 45.0f;
+
+	/*CameraBoom's relative pitch will change between -CameraPitchRange and CameraPitchRange.
+		UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+		float CameraPitchRange = 15.0f;*/
 };

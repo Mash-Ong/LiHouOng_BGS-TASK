@@ -37,32 +37,19 @@ ASkateCharacter::ASkateCharacter()
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 540.0f, 0.0f);
 	GetCharacterMovement()->JumpZVelocity = 600.0f;
 	GetCharacterMovement()->AirControl = 0.2f;
-	//// The following 3 properties are reused in calculating our custom skating movement
-	//GetCharacterMovement()->MaxWalkSpeed = 2000.0f;
-	//GetCharacterMovement()->MaxAcceleration = 0.0f;
-	//GetCharacterMovement()->BrakingDecelerationWalking = 0.0f;
-
-	/*CurrentVelocity = FVector::ZeroVector;
-	Acceleration = 600.0f;
-	Deceleration = 200.0f;
-	AccelerationDecayRate = 0.05f;*/
-}
-
-void ASkateCharacter::PostInitializeComponents()
-{
-	Super::PostInitializeComponents();
-	DefaultSkateBoardRelRot = SkateboardMesh->GetRelativeRotation();
+	
+	// Setting to slide along wall
+	GetCharacterMovement()->bEnablePhysicsInteraction = true;
+	GetCharacterMovement()->bMaintainHorizontalGroundVelocity = false;
+	GetCharacterMovement()->bAlwaysCheckFloor = true;
+	GetCharacterMovement()->bUseFlatBaseForFloorChecks = true;
 }
 
 void ASkateCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	SimulateSkatingMovement(DeltaTime);
-	if (GetCharacterMovement()->GetLastUpdateVelocity().SizeSquared() > 0) // Is moving.
-	{
-		UpdateIKLocations();
-	}
-	//SkateboardRoot->SetRelativeRotation(FRotator(SkateboardRoot->GetRelativeRotation().Roll, GetControlRotation().Yaw, SkateboardRoot->GetRelativeRotation().Pitch));
+	UpdateCameraBoom();
 }
 
 void ASkateCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -85,8 +72,10 @@ void ASkateCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 		EnhancedInputComponent->BindAction(PushAction, ETriggerEvent::Started, this, &ASkateCharacter::StartPushing);
 		EnhancedInputComponent->BindAction(PushAction, ETriggerEvent::Completed, this, &ASkateCharacter::StopPushing);
 
+		EnhancedInputComponent->BindAction(BrakeAction, ETriggerEvent::Started, this, &ASkateCharacter::StartBraking);
+		EnhancedInputComponent->BindAction(BrakeAction, ETriggerEvent::Completed, this, &ASkateCharacter::StopBraking);
+
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ASkateCharacter::Move);
-		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ASkateCharacter::Look);
 	}
 	else
 	{
@@ -97,6 +86,10 @@ void ASkateCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 void ASkateCharacter::Landed(const FHitResult& Hit)
 {
 	Super::Landed(Hit);
+	if (GetForwardInput() > 0.0f)
+	{
+		StartPushing();
+	}
 	UpdateIKLocations();
 }
 
@@ -110,6 +103,23 @@ void ASkateCharacter::UpdateIKLocations()
 		LookAtRotation = FMath::RInterpTo(SkateboardRoot->GetComponentRotation(), LookAtRotation, GetWorld()->GetDeltaSeconds(), 10.0f);
 		SkateboardRoot->SetWorldRotation(LookAtRotation);
 	}
+	//GetMesh()->GetBoneLocation("LeftFoot")
+	//GetMesh()->GetBoneLocation("RightFoot")
+}
+
+void ASkateCharacter::StartBraking()
+{
+	StopPushing();
+	PlayBrakeAnim();
+}
+
+
+void ASkateCharacter::StopBraking()
+{
+	ReverseBrakeAnim();
+
+	if (GetForwardInput() > 0.0f)
+		StartPushing();
 }
 
 void ASkateCharacter::Jump()
@@ -123,6 +133,9 @@ void ASkateCharacter::Move(const FInputActionValue& Value)
 	// Input is a Vector2D. Y is forward, X is right.
 	MovementVector = Value.Get<FVector2D>();
 
+	if (GetRightInput() != 0.0f)
+		Turn();
+
 	if (GetForwardInput() >= 0.0f)
 	{
 		// Calculate decay based on current speed
@@ -130,9 +143,14 @@ void ASkateCharacter::Move(const FInputActionValue& Value)
 		float EffectiveAcceleration = FMath::Exp(-AccelerationDecayRate * (Speed / GetCharacterMovement()->GetMaxSpeed()));*/
 		AddMovementInput(GetSkatingForwardDir() * GetForwardInput(), 1.0f);
 	}
+	else
+	{
+		// Apply a force to decelerate the actor
+		if (GetVelocity().SquaredLength() <= 0.0f)
+			return;
 
-	if (GetRightInput() != 0.0f)
-		Turn();
+		GetCharacterMovement()->AddForce(-GetVelocity() * 250.0f);
+	}
 }
 
 void ASkateCharacter::Turn()
@@ -141,7 +159,6 @@ void ASkateCharacter::Turn()
 	if (GetCharacterMovement()->IsMovingOnGround())
 	{
 		// The character is harder to turn if the speed is slow.
-		const float FullTurnSpeed = 300.0f;
 		TurnRate = GetVelocity().SquaredLength() / (FullTurnSpeed * FullTurnSpeed);
 		TurnRate = FMath::Clamp(TurnRate, 0.0f, 1.0f);
 	}
@@ -152,19 +169,6 @@ void ASkateCharacter::Turn()
 	TurnRate *= GetRightInput() < 0 ? -1 : 1;
 	AddControllerYawInput(GetCharacterMovement()->RotationRate.Yaw * TurnRate * GetWorld()->GetDeltaSeconds());
 	//AddMovementInput(GetSkatingRightDir(), TurnRate);
-}
-
-void ASkateCharacter::Look(const FInputActionValue& Value)
-{
-	// input is a Vector2D
-	FVector2D LookAxisVector = Value.Get<FVector2D>();
-
-	if (Controller != nullptr)
-	{
-		// add yaw and pitch input to controller
-		AddControllerYawInput(LookAxisVector.X);
-		AddControllerPitchInput(LookAxisVector.Y);
-	}
 }
 
 void ASkateCharacter::StartPushing()
@@ -186,14 +190,16 @@ void ASkateCharacter::StopPushing()
 void ASkateCharacter::Push(const float Force)
 {
 	GetCharacterMovement()->AddImpulse(GetSkatingForwardDir() * Force);
-	//CurrentVelocity += GetSkatingForwardDir() * Force;
 }
 
-bool ASkateCharacter::TraceForSurface(const FVector& Origin, const float TraceHalfHeight, FVector& ImpactPoint)
+bool ASkateCharacter::TraceForSurface(const FVector& Origin, const float TraceHalfHeight, FVector& ImpactPoint, bool IgnoreSelf)
 {
 	FCollisionQueryParams QueryParams;
 	QueryParams.bReturnPhysicalMaterial = true;
-	QueryParams.AddIgnoredActor(this);
+	if (IgnoreSelf)
+	{
+		QueryParams.AddIgnoredActor(this);
+	}
 	FHitResult Hit;
 	if (GetWorld()->LineTraceSingleByChannel(Hit, Origin + FVector(0.0f, 0.0f, TraceHalfHeight),
 		Origin + FVector(0.0f, 0.0f, -TraceHalfHeight), ECC_Camera, QueryParams))
@@ -201,26 +207,32 @@ bool ASkateCharacter::TraceForSurface(const FVector& Origin, const float TraceHa
 		ImpactPoint = Hit.ImpactPoint;
 		return true;
 	}
+	ImpactPoint = Origin;
 	return false;
 }
 
 void ASkateCharacter::SimulateSkatingMovement(float DeltaTime)
 {
-	/*Apply deceleration
-		if (CurrentVelocity.Size() > 0)
-		{
-			FVector DecelerationVector = -CurrentVelocity.GetSafeNormal() * Deceleration * DeltaTime;
-			if (DecelerationVector.Size() > CurrentVelocity.Size())
-			{
-				CurrentVelocity = FVector::ZeroVector;
-			}
-			else
-			{
-				CurrentVelocity += DecelerationVector;
-			}
-		}
-		AddMovementInput(CurrentVelocity.GetSafeNormal(), 1.0f);
-		MovementVector = FVector2D::ZeroVector;*/
+	if (GetCharacterMovement()->GetLastUpdateVelocity().SizeSquared() > 0) // Is moving.
+	{
+		UpdateIKLocations();
+		AlignSkateboardWithVelocity();
+	}
+	
+	MovementVector = FVector2D::ZeroVector;
+}
+
+void ASkateCharacter::UpdateCameraBoom()
+{
+	FRotator CamBoomRot = CameraBoom->GetRelativeRotation();
+	float Alpha = FMath::Clamp(FMath::Abs(GetVelocity().Z) / 15.0f, 0.0f, 1.0f);
+	CamBoomRot.Pitch = Alpha * (GetVelocity().Z < 0.0f ? MinCamPitch : MaxCamPitch);
+	CameraBoom->SetRelativeRotation(CamBoomRot);
+
+	// Camera focus to the actor.
+ 	FRotator LookAtRotation = FRotationMatrix::MakeFromX(CameraBoom->GetComponentLocation() - FollowCamera->GetComponentLocation()).Rotator();
+ 	LookAtRotation = FMath::RInterpTo(FollowCamera->GetComponentRotation(), LookAtRotation, GetWorld()->GetDeltaSeconds(), 10.0f);
+ 	FollowCamera->SetWorldRotation(LookAtRotation);
 }
 
 FVector ASkateCharacter::GetSkatingForwardDir() const
@@ -229,8 +241,6 @@ FVector ASkateCharacter::GetSkatingForwardDir() const
 	const FRotator YawRotation(0, Rotation.Yaw, 0);
 	
 	return FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-
-	//return FRotationMatrix(SkateboardMesh->GetComponentRotation() - DefaultSkateBoardRelRot).GetUnitAxis(EAxis::X);
 }
 
 FVector ASkateCharacter::GetSkatingRightDir() const
@@ -239,6 +249,25 @@ FVector ASkateCharacter::GetSkatingRightDir() const
 	const FRotator YawRotation(0, Rotation.Yaw, 0);
 
 	return FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+}
 
-	//return FRotationMatrix(SkateboardMesh->GetComponentRotation() - DefaultSkateBoardRelRot).GetUnitAxis(EAxis::Y);
+void ASkateCharacter::AlignSkateboardWithVelocity()
+{
+	if (GetCharacterMovement()->IsMovingOnGround() && !IsBraking())
+	{
+		// Try to align skateboard with the velocity.
+		const FVector MovingDir = GetVelocity().GetSafeNormal();
+		FRotator DesiredRot = MovingDir.Rotation();
+		float DotProduct = FVector::DotProduct(SkateboardRoot->GetForwardVector(), MovingDir);
+		if (DotProduct < 0)
+		{
+			DesiredRot.Yaw += 180.0f;
+		}
+		SkateboardRoot->SetWorldRotation(FMath::RInterpTo(SkateboardRoot->GetComponentRotation(), DesiredRot, GetWorld()->GetDeltaSeconds(), 10.0f));
+	}
+}
+
+bool ASkateCharacter::IsBraking() const
+{
+	return GetForwardInput() < 0.0f;
 }
